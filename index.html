@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mood Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .mood-options, .custom-mood, .time-filter {
+            margin-top: 20px;
+        }
+        .mood-options, .custom-mood {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+        }
+        .mood-option, .custom-mood button {
+            cursor: pointer;
+            padding: 10px;
+            margin: 5px;
+            border-radius: 5px;
+            background-color: #e0e0e0;
+            transition: background-color 0.3s;
+        }
+        .mood-option:hover, .custom-mood button:hover {
+            background-color: #d0d0d0;
+        }
+        #mood-log {
+            margin-top: 20px;
+        }
+        textarea, input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        @media (max-width: 480px) {
+            .mood-options, .custom-mood {
+                flex-direction: column;
+            }
+            .mood-option, .custom-mood button {
+                width: 100%;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mood Tracker</h1>
+        
+        <!-- Mood Options -->
+        <div class="mood-options">
+            <div class="mood-option" onclick="logMood('Happy')">😊 Happy</div>
+            <div class="mood-option" onclick="logMood('Neutral')">😐 Neutral</div>
+            <div class="mood-option" onclick="logMood('Sad')">😢 Sad</div>
+            <div class="mood-option" onclick="logMood('Angry')">😠 Angry</div>
+        </div>
+        
+        <!-- Mood Note -->
+        <textarea id="mood-note" placeholder="Write your note here..."></textarea>
+        
+        <!-- Custom Mood -->
+        <div class="custom-mood">
+            <input type="text" id="custom-mood" placeholder="Add a new mood">
+            <button onclick="addCustomMood()">Add</button>
+        </div>
+        
+        <!-- Time Period Filter -->
+        <div class="time-filter">
+            <label for="time-period">Select Time Period:</label>
+            <select id="time-period" onchange="filterMoods()">
+                <option value="all">All</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+            </select>
+        </div>
+        
+        <!-- Mood Log -->
+        <div id="mood-log"></div>
+        
+        <!-- Mood Chart -->
+        <canvas id="mood-chart" width="400" height="200" style="margin-top: 20px;"></canvas>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load stored moods and display them
+            filterMoods();
+
+            // Set up hourly notifications
+            setupHourlyNotifications();
+        });
+
+        // Log a mood with note
+        function logMood(mood) {
+            const now = new Date();
+            const note = document.getElementById('mood-note').value;
+            const logEntry = {
+                time: now,
+                mood: mood,
+                note: note
+            };
+            const moods = JSON.parse(localStorage.getItem('moods')) || [];
+            moods.push(logEntry);
+            localStorage.setItem('moods', JSON.stringify(moods));
+            displayMood(logEntry);
+            document.getElementById('mood-note').value = '';
+            updateMoodChart(moods);
+        }
+
+        // Display mood entry
+        function displayMood(entry) {
+            const logElement = document.getElementById('mood-log');
+            const entryElement = document.createElement('p');
+            entryElement.textContent = `${new Date(entry.time).toLocaleString('en-US')}: You felt ${entry.mood}. Note: ${entry.note}`;
+            logElement.insertBefore(entryElement, logElement.firstChild);
+        }
+
+        // Add a new custom mood
+        function addCustomMood() {
+            const customMood = document.getElementById('custom-mood').value;
+            if (customMood) {
+                const moodOptions = document.querySelector('.mood-options');
+                const newMoodOption = document.createElement('div');
+                newMoodOption.className = 'mood-option';
+                newMoodOption.textContent = customMood;
+                newMoodOption.onclick = () => logMood(customMood);
+                moodOptions.appendChild(newMoodOption);
+                document.getElementById('custom-mood').value = '';
+            }
+        }
+
+        // Filter moods by time period
+        function filterMoods() {
+            const period = document.getElementById('time-period').value;
+            const moods = JSON.parse(localStorage.getItem('moods')) || [];
+            const filteredMoods = moods.filter(mood => {
+                const moodTime = new Date(mood.time);
+                const now = new Date();
+                switch (period) {
+                    case 'week':
+                        const weekAgo = new Date();
+                        weekAgo.setDate(now.getDate() - 7);
+                        return moodTime >= weekAgo;
+                    case 'month':
+                        const monthAgo = new Date();
+                        monthAgo.setMonth(now.getMonth() - 1);
+                        return moodTime >= monthAgo;
+                    case 'year':
+                        const yearAgo = new Date();
+                        yearAgo.setFullYear(now.getFullYear() - 1);
+                        return moodTime >= yearAgo;
+                    default:
+                        return true;
+                }
+            });
+            document.getElementById('mood-log').innerHTML = '';
+            filteredMoods.forEach(displayMood);
+            updateMoodChart(filteredMoods);
+        }
+
+        // Update mood chart as Bar Chart
+        function updateMoodChart(moods) {
+            const ctx = document.getElementById('mood-chart').getContext('2d');
+
+            // Clear old chart if it exists
+            if (window.moodChart) {
+                window.moodChart.destroy();
+            }
+
+            const chartData = moods.reduce((acc, mood) => {
+                const date = new Date(mood.time).toLocaleDateString('en-US');
+                if (!acc[date]) {
+                    acc[date] = { happy: 0, neutral: 0, sad: 0, angry: 0, custom: 0 };
+                }
+                if (mood.mood === 'Happy') acc[date].happy++;
+                else if (mood.mood === 'Neutral') acc[date].neutral++;
+                else if (mood.mood === 'Sad') acc[date].sad++;
+                else if (mood.mood === 'Angry') acc[date].angry++;
+                else acc[date].custom++;
+                return acc;
+            }, {});
+
+            const labels = Object.keys(chartData);
+            const dataHappy = labels.map(date => chartData[date].happy);
+            const dataNeutral = labels.map(date => chartData[date].neutral);
+            const dataSad = labels.map(date => chartData[date].sad);
+            const dataAngry = labels.map(date => chartData[date].angry);
+            const dataCustom = labels.map(date => chartData[date].custom);
+
+            window.moodChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        { label: 'Happy', data: dataHappy, backgroundColor: 'green' },
+                        { label: 'Neutral', data: dataNeutral, backgroundColor: 'blue' },
+                        { label: 'Sad', data: dataSad, backgroundColor: 'purple' },
+                        { label: 'Angry', data: dataAngry, backgroundColor: 'red' },
+                        { label: 'Custom', data: dataCustom, backgroundColor: 'orange' }
+                    ]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+
+        // Set up hourly notifications
+        function setupHourlyNotifications() {
+            if (Notification.permission === "granted") {
+                setInterval(() => {
+                    new Notification("Time to log your mood!", {
+                        body: "Don't forget to update your mood in the Mood Tracker.",
+                        icon: "path/to/your/icon.png" // Replace with your icon path
+                    });
+                }, 60 * 60 * 1000); // Every 1 hour (60 minutes * 60 seconds * 1000 milliseconds)
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</body>
+</html>
